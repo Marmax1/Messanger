@@ -1,0 +1,83 @@
+﻿@{
+    ViewData["Title"] = "Мессенджер";
+}
+
+<div class="container mt-5">
+    <h1>Выберите комнату</h1>
+    <div class="row">
+        <div class="col-md-6">
+            <input type="text" id="nickname" class="form-control mb-2" placeholder="Ваш никнейм" />
+            <input type="text" id="roomName" class="form-control mb-2" placeholder="Название комнаты" />
+            <button id="createRoom" class="btn btn-primary">Создать комнату</button>
+        </div>
+    </div>
+    <div id="roomsList" class="mt-4">
+        <!-- Список комнат будет здесь -->
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // Получаем текущий хост и порт из URL
+        const host = window.location.hostname;
+        const port = window.location.port || (window.location.protocol === 'https:' ? 443 : 80);
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+
+        // Подключаемся к WebSocket на сервере
+        const ws = new WebSocket('ws://localhost:5000/ws');
+
+        ws.onopen = () => {
+            console.log("WebSocket подключен");
+        };
+
+        ws.onclose = () => {
+            console.log("WebSocket отключен");
+        };
+
+        // Обработка создания комнаты
+        document.getElementById("createRoom").addEventListener("click", async () => {
+            const nickname = document.getElementById("nickname").value;
+            const roomName = document.getElementById("roomName").value;
+
+            if (!nickname || !roomName) {
+                alert("Заполните никнейм и название комнаты!");
+                return;
+            }
+
+            // Сначала создаем пользователя
+            const joinMsg = {
+                action: "join",
+                nickname: nickname
+            };
+            ws.send(JSON.stringify(joinMsg));
+
+            // Затем создаем комнату
+            const createMsg = {
+                action: "create_room",
+                roomName: roomName
+            };
+            ws.send(JSON.stringify(createMsg));
+        });
+
+        // Обработка ответов от сервера
+        ws.onmessage = (e) => {
+            const data = JSON.parse(e.data);
+            console.log("Получено сообщение:", data);
+
+            if (data.type === "room_created") {
+                window.location.href = `/Home/Room?roomId=${data.data.roomId}`;
+            }
+            else if (data.type === "error") {
+                alert(`Ошибка: ${data.error}`);
+            }
+        };
+
+        ws.onerror = (e) => {
+            console.error("WebSocket error:", e);
+            alert("Не удалось подключиться к серверу. Пожалуйста, проверьте:\n"
+        + "1. Сервер запущен\n"
+        + "2. Адрес: " + `${wsProtocol}${host}:${port}/ws` + "\n"
+        + "3. Консоль разработчика (F12) для подробностей");
+        };
+    </script>
+}

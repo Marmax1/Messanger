@@ -1,0 +1,28 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.12.35514.174
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Server", "DAL\Server.csproj", "{2AEC4E46-F675-4696-96D2-3F49DED4BC8A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MessangerWeb", "MessangerWeb\MessangerWeb.csproj", "{597AE50B-7F01-473D-81F8-CAF39650C21B}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{2AEC4E46-F675-4696-96D2-3F49DED4BC8A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2AEC4E46-F675-4696-96D2-3F49DED4BC8A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2AEC4E46-F675-4696-96D2-3F49DED4BC8A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2AEC4E46-F675-4696-96D2-3F49DED4BC8A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{597AE50B-7F01-473D-81F8-CAF39650C21B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{597AE50B-7F01-473D-81F8-CAF39650C21B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{597AE50B-7F01-473D-81F8-CAF39650C21B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{597AE50B-7F01-473D-81F8-CAF39650C21B}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

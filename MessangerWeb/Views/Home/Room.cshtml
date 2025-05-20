@@ -1,0 +1,58 @@
+﻿@{
+    ViewData["Title"] = "Комната " + ViewBag.RoomId;
+}
+
+<div class="container mt-5">
+    <h1>Комната @ViewBag.RoomId</h1>
+    <div class="row">
+        <div class="col-md-8">
+            <div id="messages" class="border p-3 mb-3" style="height: 400px; overflow-y: scroll;">
+                <!-- Сообщения будут здесь -->
+            </div>
+            <input type="text" id="messageInput" class="form-control mb-2" placeholder="Введите сообщение" />
+            <button id="sendButton" class="btn btn-success">Отправить</button>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        const roomId = "@ViewBag.RoomId";
+        const nickname = localStorage.getItem("nickname") || prompt("Введите ваш никнейм:");
+        localStorage.setItem("nickname", nickname);
+
+        const ws = new WebSocket("ws://localhost:5000/ws");
+
+        // Отправка сообщения
+        document.getElementById("sendButton").addEventListener("click", () => {
+            const text = document.getElementById("messageInput").value;
+            ws.send(JSON.stringify({
+                action: "send",
+                userId: 1,  // В реальном приложении нужно получать ID после входа
+                roomId: parseInt(roomId),
+                text: text
+            }));
+            document.getElementById("messageInput").value = "";
+        });
+
+        // Получение сообщений
+        ws.onmessage = (e) => {
+            const data = JSON.parse(e.data);
+            if (data.type === "message") {
+                const messagesDiv = document.getElementById("messages");
+                messagesDiv.innerHTML += `<div><strong>${data.data.sender}:</strong> ${data.data.text}</div>`;
+                messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            }
+        };
+
+        // Загрузка истории при входе
+        ws.onopen = () => {
+            ws.send(JSON.stringify({
+                action: "load_history",
+                roomId: parseInt(roomId),
+                page: 1,
+                pageSize: 20
+            }));
+        };
+    </script>
+}
