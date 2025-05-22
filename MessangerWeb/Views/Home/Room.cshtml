@@ -3,56 +3,215 @@
 }
 
 <div class="container mt-5">
-    <h1>Комната @ViewBag.RoomId</h1>
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Комната @ViewBag.RoomId</h1>
+        <button id="leaveRoomBtn" class="btn btn-danger">Покинуть комнату</button>
+    </div>
+
     <div class="row">
         <div class="col-md-8">
-            <div id="messages" class="border p-3 mb-3" style="height: 400px; overflow-y: scroll;">
-                <!-- Сообщения будут здесь -->
+            <div id="messages" class="border p-3 mb-3" style="height: 400px; overflow-y: scroll;"></div>
+
+            <div class="input-group mb-3">
+                <input type="text" id="messageInput" class="form-control" placeholder="Введите сообщение" />
+                <button id="sendButton" class="btn btn-success">Отправить</button>
             </div>
-            <input type="text" id="messageInput" class="form-control mb-2" placeholder="Введите сообщение" />
-            <button id="sendButton" class="btn btn-success">Отправить</button>
+
+            <div class="d-flex justify-content-center">
+                <button id="loadMoreBtn" class="btn btn-secondary">Загрузить предыдущие сообщения</button>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">Участники комнаты</div>
+                <div id="usersList" class="card-body"></div>
+            </div>
         </div>
     </div>
 </div>
 
 @section Scripts {
     <script>
-        const roomId = "@ViewBag.RoomId";
-        const nickname = localStorage.getItem("nickname") || prompt("Введите ваш никнейм:");
-        localStorage.setItem("nickname", nickname);
+        const roomId = parseInt("@ViewBag.RoomId");
+        let ws;
+        let currentUser = null;
+        let currentPage = 1;
+        const pageSize = 20;
 
-        const ws = new WebSocket("ws://localhost:5000/ws");
+        function initWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+            const host = window.location.host;
+            ws = new WebSocket(`${protocol}${host}/ws`);
 
-        // Отправка сообщения
-        document.getElementById("sendButton").addEventListener("click", () => {
-            const text = document.getElementById("messageInput").value;
-            ws.send(JSON.stringify({
-                action: "send",
-                userId: 1,  // В реальном приложении нужно получать ID после входа
-                roomId: parseInt(roomId),
-                text: text
-            }));
-            document.getElementById("messageInput").value = "";
-        });
+            ws.onopen = () => {
+                console.log("WebSocket подключен");
+                joinRoom();
+            };
 
-        // Получение сообщений
-        ws.onmessage = (e) => {
-            const data = JSON.parse(e.data);
-            if (data.type === "message") {
-                const messagesDiv = document.getElementById("messages");
-                messagesDiv.innerHTML += `<div><strong>${data.data.sender}:</strong> ${data.data.text}</div>`;
-                messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            ws.onclose = () => {
+                console.log("WebSocket отключен");
+                setTimeout(initWebSocket, 5000);
+            };
+
+            ws.onmessage = handleServerMessage;
+            ws.onerror = (e) => console.error("WebSocket error:", e);
+        }
+
+        function joinRoom() {
+            sendMessage({ action: "join", roomId });
+        }
+
+        function handleServerMessage(e) {
+            try {
+                const data = JSON.parse(e.data);
+                console.log("Получено сообщение:", data);
+
+                switch (data.type) {
+                    case "join_success":
+                        currentUser = { id: data.data.userId };
+                        loadHistory();
+                        getUsers();
+                        break;
+                    case "message":
+                        addMessage(data.data);
+                        break;
+                    case "history":
+                        addHistoryMessages(data.data);
+                        break;
+                    case "users_list":
+                        updateUsersList(data.data);
+                        break;
+                    case "left_room":
+                        window.location.href = '/';
+                        break;
+                    case "error":
+                        alert(data.error);
+                        break;
+                    default:
+                        console.warn("Неизвестный тип сообщения:", data.type);
+                }
+            } catch (error) {
+                console.error("Ошибка обработки сообщения:", error);
             }
-        };
+        }
 
-        // Загрузка истории при входе
-        ws.onopen = () => {
-            ws.send(JSON.stringify({
+        function addMessage(message) {
+            const messagesDiv = document.getElementById('messages');
+            const messageElement = document.createElement('div');
+            messageElement.className = 'mb-2';
+            messageElement.innerHTML = `
+                <div class="d-flex justify-content-between">
+                    <strong>${message.sender}</strong>
+                    <small class="text-muted">${new Date(message.timestamp).toLocaleTimeString()}</small>
+                </div>
+                <div>${message.text}</div>
+            `;
+            messagesDiv.appendChild(messageElement);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function addHistoryMessages(messages) {
+            const messagesDiv = document.getElementById('messages');
+
+            if (!messages.length) {
+                if (currentPage === 1) {
+                    messagesDiv.innerHTML = '<div class="text-muted text-center">Нет сообщений</div>';
+                }
+                return;
+            }
+
+            const fragment = document.createDocumentFragment();
+            messages.reverse().forEach(msg => {
+                const messageElement = document.createElement('div');
+                messageElement.className = 'mb-2';
+                messageElement.innerHTML = `
+                    <div class="d-flex justify-content-between">
+                        <strong>${msg.sender}</strong>
+                        <small class="text-muted">${new Date(msg.timestamp).toLocaleTimeString()}</small>
+                    </div>
+                    <div>${msg.text}</div>
+                `;
+                fragment.appendChild(messageElement);
+            });
+
+            messagesDiv.insertBefore(fragment, messagesDiv.firstChild);
+        }
+
+        function updateUsersList(users) {
+            const usersList = document.getElementById('usersList');
+            usersList.innerHTML = '';
+
+            if (!users.length) {
+                usersList.innerHTML = '<div class="text-muted">Нет пользователей</div>';
+                return;
+            }
+
+            const list = document.createElement('ul');
+            list.className = 'list-unstyled';
+
+            users.forEach(user => {
+                const item = document.createElement('li');
+                item.className = 'mb-1';
+                item.textContent = user.nickname + (user.id === currentUser?.id ? ' (Вы)' : '');
+                list.appendChild(item);
+            });
+
+            usersList.appendChild(list);
+        }
+
+        function loadHistory() {
+            sendMessage({
                 action: "load_history",
-                roomId: parseInt(roomId),
-                page: 1,
-                pageSize: 20
-            }));
-        };
+                roomId,
+                page: currentPage,
+                pageSize
+            });
+        }
+
+        function getUsers() {
+            sendMessage({ action: "get_users", roomId });
+        }
+
+        function leaveRoom() {
+            sendMessage({ action: "leave", roomId });
+        }
+
+        function sendMessage(message) {
+            if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify(message));
+            } else {
+                console.error("WebSocket не подключен");
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initWebSocket();
+
+            document.getElementById('sendButton').addEventListener('click', () => {
+                const text = document.getElementById('messageInput').value.trim();
+                if (!text) return;
+
+                sendMessage({
+                    action: "send",
+                    roomId,
+                    text
+                });
+                document.getElementById('messageInput').value = '';
+            });
+
+            document.getElementById('messageInput').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    document.getElementById('sendButton').click();
+                }
+            });
+
+            document.getElementById('loadMoreBtn').addEventListener('click', () => {
+                currentPage++;
+                loadHistory();
+            });
+
+            document.getElementById('leaveRoomBtn').addEventListener('click', leaveRoom);
+        });
     </script>
 }

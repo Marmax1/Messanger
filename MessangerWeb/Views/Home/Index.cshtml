@@ -3,81 +3,149 @@
 }
 
 <div class="container mt-5">
-    <h1>Выберите комнату</h1>
-    <div class="row">
-        <div class="col-md-6">
-            <input type="text" id="nickname" class="form-control mb-2" placeholder="Ваш никнейм" />
-            <input type="text" id="roomName" class="form-control mb-2" placeholder="Название комнаты" />
-            <button id="createRoom" class="btn btn-primary">Создать комнату</button>
+    <div id="authSection" class="mb-4">
+        <h2>Вход в систему</h2>
+        <div class="row">
+            <div class="col-md-6">
+                <input type="text" id="nickname" class="form-control mb-2" placeholder="Ваш никнейм" required />
+                <button id="loginBtn" class="btn btn-primary">Войти</button>
+            </div>
         </div>
     </div>
-    <div id="roomsList" class="mt-4">
-        <!-- Список комнат будет здесь -->
+
+    <div id="roomsSection" style="display: none;">
+        <h2>Добро пожаловать, <span id="userNickname"></span>!</h2>
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <input type="text" id="roomName" class="form-control mb-2" placeholder="Название комнаты" />
+                <button id="createRoomBtn" class="btn btn-success">Создать комнату</button>
+                <button id="refreshRoomsBtn" class="btn btn-secondary">Обновить список</button>
+            </div>
+        </div>
+        <div id="roomsList" class="mt-4 list-group">
+            <!-- Список комнат будет здесь -->
+        </div>
     </div>
 </div>
 
 @section Scripts {
     <script>
-        // Получаем текущий хост и порт из URL
-        const host = window.location.hostname;
-        const port = window.location.port || (window.location.protocol === 'https:' ? 443 : 80);
-        const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+        let ws;
+        let currentUser = null;
 
-        // Подключаемся к WebSocket на сервере
-        const ws = new WebSocket('ws://localhost:5000/ws');
+        function initWebSocket() {
+            ws = new WebSocket('ws://localhost:5000/ws');
 
-        ws.onopen = () => {
-            console.log("WebSocket подключен");
-        };
+            ws.onopen = () => {
+                console.log("WebSocket подключен");
+                if (currentUser) {
+                    getRooms();
+                }
+            };
 
-        ws.onclose = () => {
-            console.log("WebSocket отключен");
-        };
+            ws.onclose = () => {
+                console.log("WebSocket отключен");
+                setTimeout(initWebSocket, 5000);
+            };
 
-        // Обработка создания комнаты
-        document.getElementById("createRoom").addEventListener("click", async () => {
-            const nickname = document.getElementById("nickname").value;
-            const roomName = document.getElementById("roomName").value;
+            ws.onmessage = handleServerMessage;
+            ws.onerror = (e) => console.error("WebSocket error:", e);
+        }
 
-            if (!nickname || !roomName) {
-                alert("Заполните никнейм и название комнаты!");
+        function handleServerMessage(e) {
+            try {
+                const data = JSON.parse(e.data);
+                console.log("Получено сообщение:", data);
+
+                switch (data.type) {
+                    case "auth_success":
+                        handleAuthSuccess(data.data);
+                        break;
+                    case "rooms_list":
+                        updateRoomsList(data.data);
+                        break;
+                    case "room_created":
+                        window.location.href = `/Home/Room?roomId=${data.data.id}`;
+                        break;
+                    case "error":
+                        alert(data.error);
+                        break;
+                    default:
+                        console.warn("Неизвестный тип сообщения:", data.type);
+                }
+            } catch (error) {
+                console.error("Ошибка обработки сообщения:", error);
+            }
+        }
+
+        function handleAuthSuccess(data) {
+            currentUser = {
+                id: data.userId,
+                nickname: data.nickname
+            };
+
+            document.getElementById('userNickname').textContent = data.nickname;
+            document.getElementById('authSection').style.display = 'none';
+            document.getElementById('roomsSection').style.display = 'block';
+            getRooms();
+        }
+
+        function updateRoomsList(rooms) {
+            const roomsList = document.getElementById('roomsList');
+            roomsList.innerHTML = rooms.length ? '' : '<div class="list-group-item">Нет доступных комнат</div>';
+
+            rooms.forEach(room => {
+                const roomElement = document.createElement('div');
+                roomElement.className = 'list-group-item d-flex justify-content-between align-items-center';
+                roomElement.innerHTML = `
+                    <span>${room.name}</span>
+                    <button class="btn btn-sm btn-primary join-room-btn" data-room-id="${room.id}">Войти</button>
+                `;
+                roomsList.appendChild(roomElement);
+            });
+
+            document.querySelectorAll('.join-room-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    window.location.href = `/Home/Room?roomId=${btn.dataset.roomId}`;
+                });
+            });
+        }
+
+        function getRooms() {
+            sendMessage({ action: "get_rooms" });
+        }
+
+        function createRoom() {
+            const roomName = document.getElementById('roomName').value.trim();
+            if (!roomName) {
+                alert('Введите название комнаты');
                 return;
             }
+            sendMessage({ action: "create_room", roomName });
+        }
 
-            // Сначала создаем пользователя
-            const joinMsg = {
-                action: "join",
-                nickname: nickname
-            };
-            ws.send(JSON.stringify(joinMsg));
+        function sendMessage(message) {
+            if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify(message));
+            } else {
+                console.error("WebSocket не подключен");
+            }
+        }
 
-            // Затем создаем комнату
-            const createMsg = {
-                action: "create_room",
-                roomName: roomName
-            };
-            ws.send(JSON.stringify(createMsg));
+        document.addEventListener('DOMContentLoaded', () => {
+            initWebSocket();
+
+            document.getElementById('loginBtn').addEventListener('click', () => {
+                const nickname = document.getElementById('nickname').value.trim();
+                if (!nickname) {
+                    alert('Введите ваш никнейм');
+                    return;
+                }
+                sendMessage({ action: "auth", nickname });
+            });
+
+            document.getElementById('createRoomBtn').addEventListener('click', createRoom);
+            document.getElementById('refreshRoomsBtn').addEventListener('click', getRooms);
         });
-
-        // Обработка ответов от сервера
-        ws.onmessage = (e) => {
-            const data = JSON.parse(e.data);
-            console.log("Получено сообщение:", data);
-
-            if (data.type === "room_created") {
-                window.location.href = `/Home/Room?roomId=${data.data.roomId}`;
-            }
-            else if (data.type === "error") {
-                alert(`Ошибка: ${data.error}`);
-            }
-        };
-
-        ws.onerror = (e) => {
-            console.error("WebSocket error:", e);
-            alert("Не удалось подключиться к серверу. Пожалуйста, проверьте:\n"
-        + "1. Сервер запущен\n"
-        + "2. Адрес: " + `${wsProtocol}${host}:${port}/ws` + "\n"
-        + "3. Консоль разработчика (F12) для подробностей");
-        };
     </script>
 }

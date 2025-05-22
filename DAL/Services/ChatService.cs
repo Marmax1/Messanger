@@ -11,19 +11,17 @@ public class ChatService
 		_db = db;
 	}
 
+
 	public async Task<Message> SendMessage(int userId, int roomId, string text)
 	{
-		// Проверяем существование пользователя и комнаты
-		var user = await _db.Users.FindAsync(userId);
-		if (user == null)
+		if (!await _db.Users.AnyAsync(u => u.Id == userId))
 			throw new Exception("Пользователь не найден");
 
-		var room = await _db.ChatRooms.FindAsync(roomId);
-		if (room == null)
+		if (!await _db.ChatRooms.AnyAsync(r => r.Id == roomId))
 			throw new Exception("Комната не найдена");
 
-		if (text.Length > 1000)
-			throw new Exception("Сообщение слишком длинное");
+		if (string.IsNullOrWhiteSpace(text) || text.Length > 1000)
+			throw new Exception("Сообщение должно быть от 1 до 1000 символов");
 
 		var message = new Message
 		{
@@ -36,8 +34,7 @@ public class ChatService
 		_db.Messages.Add(message);
 		await _db.SaveChangesAsync();
 
-		// Явно подгружаем пользователя для ответа
-		message.User = user;
+		message.User = await _db.Users.FindAsync(userId);
 		return message;
 	}
 
@@ -87,4 +84,23 @@ public class ChatService
 
 		return room;  // Важно вернуть созданную комнату
 	}
+
+	// Удалить комнату
+	public async Task DeleteRoom(int roomId)
+	{
+		var room = await _db.ChatRooms.FindAsync(roomId);
+		if (room == null) return;
+
+		_db.ChatRooms.Remove(room);
+		await _db.SaveChangesAsync();
+	}
+
+	public async Task<ChatRoom> GetRoomById(int roomId)
+	{
+		return await _db.ChatRooms.FirstOrDefaultAsync(r => r.Id == roomId);
+	}
+
+	// Список всех комнат
+	public async Task<List<ChatRoom>> GetAllRooms()
+		=> await _db.ChatRooms.ToListAsync();
 }

@@ -14,6 +14,8 @@ using System.Threading.Tasks;
 using Server.Data;
 using Server.Models;
 using Microsoft.Extensions.Configuration;
+using Server.WS;
+using System.Collections.Specialized;
 
 namespace Server
 {
@@ -37,6 +39,8 @@ namespace Server
 			// Регистрация сервисов
 			builder.Services.AddSingleton<ChatService>();
 			builder.Services.AddSingleton<UserService>();
+			builder.Services.AddSingleton<OnlineUsersService>();
+			builder.Services.AddSingleton<WebSocketHandler>();
 
 			// Добавляем политику CORS
 			builder.Services.AddCors(options =>
@@ -57,7 +61,7 @@ namespace Server
 			// Middleware для WebSocket
 			app.UseWebSockets();
 
-			// Обработчик WS-подключений
+			// Обработчик WebSocket
 			app.Map("/ws", async context =>
 			{
 				if (!context.WebSockets.IsWebSocketRequest)
@@ -67,39 +71,13 @@ namespace Server
 				}
 
 				using var ws = await context.WebSockets.AcceptWebSocketAsync();
-				var buffer = new byte[1024 * 4];
-
-				try
-				{
-					while (ws.State == WebSocketState.Open)
-					{
-						var result = await ws.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
-
-						if (result.MessageType == WebSocketMessageType.Close)
-							break;
-
-						string json = Encoding.UTF8.GetString(buffer, 0, result.Count);
-						string response;
-
-						try
-						{
-							var message = JsonSerializer.Deserialize<WebSocketMessage>(json);
-							response = await WebSocketHub.ProcessMessage(message, context.RequestServices);
-						}
-						catch (JsonException)
-						{
-							response = JsonSerializer.Serialize(new { type = "error", error = "Неверный формат JSON" });
-						}
-
-						await ws.SendAsync(Encoding.UTF8.GetBytes(response), WebSocketMessageType.Text, true, CancellationToken.None);
-					}
-				}
-				catch (Exception ex)
-				{
-					Console.WriteLine($"Ошибка: {ex.Message}");
-					await ws.CloseAsync(WebSocketCloseStatus.InternalServerError, "Server error", CancellationToken.None);
-				}
+				var handler = context.RequestServices.GetRequiredService<WebSocketHandler>();
+				await handler.HandleConnection(ws, context.RequestAborted);
 			});
+
+			// HTTP endpoint для получения списка комнат
+			app.MapGet("/api/rooms", async (ChatService chatService) =>
+				Results.Json(await chatService.GetAllRooms()));
 
 			app.Run("http://localhost:5000");
 		}

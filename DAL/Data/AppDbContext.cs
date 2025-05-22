@@ -34,7 +34,7 @@ public partial class AppDbContext : DbContext
 
             entity.Property(e => e.CreatedAt)
                 .HasDefaultValueSql("now()")
-                .HasColumnType("timestamp without time zone");
+                .HasColumnType("timestamp with time zone");
             entity.Property(e => e.Name).HasMaxLength(100);
         });
 
@@ -46,7 +46,7 @@ public partial class AppDbContext : DbContext
 
             entity.Property(e => e.SentAt)
                 .HasDefaultValueSql("now()")
-                .HasColumnType("timestamp without time zone");
+                .HasColumnType("timestamp with time zone");
 
             entity.HasOne(d => d.ChatRoom).WithMany(p => p.Messages)
                 .HasForeignKey(d => d.ChatRoomId)
@@ -67,7 +67,7 @@ public partial class AppDbContext : DbContext
 
             entity.Property(e => e.JoinedAt)
                 .HasDefaultValueSql("now()")
-                .HasColumnType("timestamp without time zone");
+                .HasColumnType("timestamp with time zone");
             entity.Property(e => e.Nickname).HasMaxLength(50);
         });
 

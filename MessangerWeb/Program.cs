@@ -1,3 +1,7 @@
+using System;
+using System.Net.WebSockets;
+using System.Text;
+
 namespace MessangerWeb
 {
 	public class Program
@@ -8,7 +12,7 @@ namespace MessangerWeb
 
 			// Add services to the container.
 			builder.Services.AddControllersWithViews();
-
+			
 			var app = builder.Build();
 
 			// Configure the HTTP request pipeline.
@@ -19,13 +23,9 @@ namespace MessangerWeb
 				app.UseHsts();
 			}
 
-			app.UseHttpsRedirection();
 			app.UseWebSockets();  // Включаем WebSocket
 			app.UseStaticFiles();
-
 			app.UseRouting();
-
-			app.UseAuthorization();
 
 			app.MapControllerRoute(
 				name: "default",
