@@ -23,10 +23,18 @@ namespace MessangerWeb.Controllers
 			return View();
 		}
 
-		public IActionResult Room(string roomId)
+		public IActionResult Room(int roomId)  // Изменяем тип параметра на int
 		{
 			ViewBag.RoomId = roomId;
-			return View();  // Страница конкретной комнаты
+			ViewBag.RoomName = GetRoomName(roomId);  // Добавляем название комнаты
+			return View();
+		}
+
+		private string GetRoomName(int roomId)
+		{
+			// Здесь должна быть логика получения названия комнаты из БД
+			// Временно возвращаем заглушку
+			return $"Комната {roomId}";
 		}
 
 		[ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]

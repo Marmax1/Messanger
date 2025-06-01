@@ -1,10 +1,10 @@
 ﻿@{
-    ViewData["Title"] = "Комната " + ViewBag.RoomId;
+    ViewData["Title"] = "Комната " + ViewBag.RoomName;
 }
 
 <div class="container mt-5">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1>Комната @ViewBag.RoomId</h1>
+        <h1>@(ViewBag.RoomName ?? $"Комната {ViewBag.RoomId}")</h1>
         <button id="leaveRoomBtn" class="btn btn-danger">Покинуть комнату</button>
     </div>
 
@@ -38,6 +38,7 @@
         let currentUser = null;
         let currentPage = 1;
         const pageSize = 20;
+        let isLoadingHistory = false;
 
         function initWebSocket() {
             const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
@@ -77,22 +78,26 @@
                         addMessage(data.data);
                         break;
                     case "history":
-                        addHistoryMessages(data.data);
+                        displayHistoryMessages(data.data.messages || []);
+                        isLoadingHistory = false;
                         break;
                     case "users_list":
-                        updateUsersList(data.data);
+                        updateUsersList(data.data || []);
                         break;
                     case "left_room":
+                        console.log("Успешно покинули комнату", data.data.roomId);
                         window.location.href = '/';
                         break;
                     case "error":
                         alert(data.error);
+                        isLoadingHistory = false;
                         break;
                     default:
                         console.warn("Неизвестный тип сообщения:", data.type);
                 }
             } catch (error) {
                 console.error("Ошибка обработки сообщения:", error);
+                isLoadingHistory = false;
             }
         }
 
@@ -103,7 +108,7 @@
             messageElement.innerHTML = `
                 <div class="d-flex justify-content-between">
                     <strong>${message.sender}</strong>
-                    <small class="text-muted">${new Date(message.timestamp).toLocaleTimeString()}</small>
+                    <small class="text-muted">${new Date(message.timestamp).toLocaleString()}</small>
                 </div>
                 <div>${message.text}</div>
             `;
@@ -111,31 +116,37 @@
             messagesDiv.scrollTop = messagesDiv.scrollHeight;
         }
 
-        function addHistoryMessages(messages) {
+        function displayHistoryMessages(messages) {
             const messagesDiv = document.getElementById('messages');
 
-            if (!messages.length) {
-                if (currentPage === 1) {
+            if (currentPage === 1) {
+                messagesDiv.innerHTML = '';
+                if (messages.length === 0) {
                     messagesDiv.innerHTML = '<div class="text-muted text-center">Нет сообщений</div>';
+                    return;
                 }
-                return;
             }
 
             const fragment = document.createDocumentFragment();
-            messages.reverse().forEach(msg => {
+            messages.forEach(msg => {
                 const messageElement = document.createElement('div');
                 messageElement.className = 'mb-2';
                 messageElement.innerHTML = `
                     <div class="d-flex justify-content-between">
                         <strong>${msg.sender}</strong>
-                        <small class="text-muted">${new Date(msg.timestamp).toLocaleTimeString()}</small>
+                        <small class="text-muted">${new Date(msg.timestamp).toLocaleString()}</small>
                     </div>
                     <div>${msg.text}</div>
                 `;
                 fragment.appendChild(messageElement);
             });
 
-            messagesDiv.insertBefore(fragment, messagesDiv.firstChild);
+            if (currentPage === 1) {
+                messagesDiv.appendChild(fragment);
+                messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            } else {
+                messagesDiv.insertBefore(fragment, messagesDiv.firstChild);
+            }
         }
 
         function updateUsersList(users) {
@@ -153,7 +164,7 @@
             users.forEach(user => {
                 const item = document.createElement('li');
                 item.className = 'mb-1';
-                item.textContent = user.nickname + (user.id === currentUser?.id ? ' (Вы)' : '');
+                item.textContent = `${user.nickname}${user.id === currentUser?.id ? ' (Вы)' : ''}`;
                 list.appendChild(item);
             });
 
@@ -161,6 +172,9 @@
         }
 
         function loadHistory() {
+            if (isLoadingHistory) return;
+
+            isLoadingHistory = true;
             sendMessage({
                 action: "load_history",
                 roomId,
@@ -174,36 +188,48 @@
         }
 
         function leaveRoom() {
-            sendMessage({ action: "leave", roomId });
+            if (confirm('Вы уверены, что хотите покинуть комнату?')) {
+                sendMessage({
+                    action: "leave",
+                    roomId: roomId
+                });
+            }
         }
 
         function sendMessage(message) {
             if (ws.readyState === WebSocket.OPEN) {
+                console.log("Отправка сообщения:", message);
                 ws.send(JSON.stringify(message));
             } else {
-                console.error("WebSocket не подключен");
+                console.error("WebSocket не подключен. Состояние:", ws.readyState);
+                setTimeout(() => {
+                    console.log("Повторная попытка отправки...");
+                    sendMessage(message);
+                }, 500);
             }
+        }
+
+        function sendNewMessage() {
+            const input = document.getElementById('messageInput');
+            const text = input.value.trim();
+            if (!text) return;
+
+            sendMessage({
+                action: "send",
+                roomId,
+                text
+            });
+            input.value = '';
+            input.focus();
         }
 
         document.addEventListener('DOMContentLoaded', () => {
             initWebSocket();
 
-            document.getElementById('sendButton').addEventListener('click', () => {
-                const text = document.getElementById('messageInput').value.trim();
-                if (!text) return;
-
-                sendMessage({
-                    action: "send",
-                    roomId,
-                    text
-                });
-                document.getElementById('messageInput').value = '';
-            });
+            document.getElementById('sendButton').addEventListener('click', sendNewMessage);
 
             document.getElementById('messageInput').addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') {
-                    document.getElementById('sendButton').click();
-                }
+                if (e.key === 'Enter') sendNewMessage();
             });
 
             document.getElementById('loadMoreBtn').addEventListener('click', () => {

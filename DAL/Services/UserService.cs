@@ -46,4 +46,10 @@ public class UserService
 		else
 			throw new Exception("Такого пользователя не существует");
 	}
+
+	public async Task<User> GetUserById(int userId)
+	{
+		return await _db.Users.FindAsync(userId)
+			   ?? throw new Exception("Пользователь не найден");
+	}
 }

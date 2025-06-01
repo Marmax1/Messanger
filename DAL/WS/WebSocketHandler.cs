@@ -103,7 +103,7 @@ public class WebSocketHandler
 				"send" => await HandleSendMessage(JsonSerializer.Deserialize<SendMessageRequest>(json), chatService, connectionInfo),
 				"load_history" => await HandleLoadHistory(JsonSerializer.Deserialize<LoadHistoryRequest>(json), chatService),
 				"get_rooms" => await HandleGetRooms(chatService),
-				"get_users" => HandleGetUsers(JsonSerializer.Deserialize<GetUsersRequest>(json), onlineUsers),
+				"get_users" => await HandleGetUsers(JsonSerializer.Deserialize<GetUsersRequest>(json), onlineUsers, chatService),
 				"leave" => HandleLeaveRoom(JsonSerializer.Deserialize<LeaveRoomRequest>(json), onlineUsers, connectionInfo),
 				"delete_room" => await HandleDeleteRoom(JsonSerializer.Deserialize<DeleteRoomRequest>(json), chatService),
 				_ => ErrorResponse("Неизвестная команда")
@@ -216,12 +216,20 @@ public class WebSocketHandler
 		return SuccessResponse("rooms_list", rooms);
 	}
 
-	private static string HandleGetUsers(GetUsersRequest request, OnlineUsersService onlineUsers)
+	private static async Task<string> HandleGetUsers(GetUsersRequest request, OnlineUsersService onlineUsers, ChatService chatService)
 	{
 		if (request.RoomId <= 0)
 			return ErrorResponse("Некорректный ID комнаты");
 
-		var users = onlineUsers.GetRoomUsers(request.RoomId);
+		var userIds = onlineUsers.GetRoomUsers(request.RoomId);
+		var users = new List<object>();
+
+		foreach (var userId in userIds)
+		{
+			var user = await chatService.GetUserById(userId);
+			users.Add(new { id = user.Id, nickname = user.Nickname });
+		}
+
 		return SuccessResponse("users_list", users);
 	}
 

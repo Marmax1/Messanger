@@ -11,6 +11,10 @@ public class ChatService
 		_db = db;
 	}
 
+	public async Task<User> GetUserById(int userId)
+	{
+		return await _db.Users.FindAsync(userId);
+	}
 
 	public async Task<Message> SendMessage(int userId, int roomId, string text)
 	{
